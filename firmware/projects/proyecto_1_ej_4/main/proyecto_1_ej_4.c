@@ -1,10 +1,8 @@
-/*! @mainpage Template
+/*! @mainpage Proyecto 1 ejercicio 6
  *
  * @section genDesc General Description
- *
- * This section describes how the program works.
- *
- * <a href="https://drive.google.com/...">Operation Example</a>
+ * A partir del dato de un numero y la cantidad de sus digitos,
+ * grafica el numero en un diplay LCD.	
  *
  * @section hardConn Hardware Connection
  *
@@ -19,17 +17,9 @@
  * |:----------:|:-----------------------------------------------|
  * | 12/09/2023 | Document creation		                         |
  *
- * @author Albano Peñalva (albano.penalva@uner.edu.ar)
+ * @author Joaquin Machado (joaquin.machado@ingenieria.uner.edu.ar)
  *
  */
-
-/*
-Escriba una función que reciba un dato de 32 bits,  la cantidad de dígitos de salida 
-y un puntero a un arreglo donde se almacene los n dígitos. La función deberá convertir 
-el dato recibido a BCD, guardando cada uno de los dígitos de salida en el arreglo pasado 
-como puntero.
-*/
-
 
 /*==================[inclusions]=============================================*/
 #include <stdio.h>
@@ -48,7 +38,7 @@ int8_t  convertToBcdArray (uint32_t data, uint8_t digits, uint8_t * bcd_number)	
 	{
 		bcd_number[i] = data%10;
 		data = data/10;
-		printf("%d", bcd_number[i]);
+		//printf("%d", bcd_number[i]);
 	}
 	return 1;
 }

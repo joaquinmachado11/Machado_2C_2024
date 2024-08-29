@@ -68,16 +68,17 @@ void BCDtoGPIO(uint8_t bcd_number, gpioConf_t *gpio){
 
 		mask = mask << 1;
 	}
+	
 }
 
 
 /*==================[external functions definition]==========================*/
 void app_main(void){
 	
-	gpioConf_t *gpio[4] = {{GPIO_20, GPIO_OUTPUT},{GPIO_21, GPIO_OUTPUT},{GPIO_22, GPIO_OUTPUT},{GPIO_23, GPIO_OUTPUT}};
+	gpioConf_t gpio[4] = {{GPIO_20, GPIO_OUTPUT},{GPIO_21, GPIO_OUTPUT},{GPIO_22, GPIO_OUTPUT},{GPIO_23, GPIO_OUTPUT}};
 
-	uint8_t bcd_number = 3; 
+	uint8_t bcd_number = 6; 
 
-	BCDtoGPIO(&bcd_number, gpio);
+	BCDtoGPIO(bcd_number, gpio);
 }
 /*==================[end of file]============================================*/
