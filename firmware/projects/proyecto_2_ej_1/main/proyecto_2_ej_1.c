@@ -42,15 +42,90 @@
 #define CONFIG_BLINK_PERIOD_LED_1 300
 #define CONFIG_BLINK_PERIOD_LED_2 600
 #define CONFIG_BLINK_PERIOD_LED_3 1000
+#define CONFIG_OFF_PERIOD_LEDs 500  
+
+#define TIEMPO_REFRESCO_PANTALLA 200
+#define TIEMPO_MEDICION 1000
+
+uint16_t distancia;
 /*==================[internal data definition]===============================*/
+/** @struct gpioConf_t
+ *  @brief Estructura para pines GPIO 
+ */
+typedef struct 
+{
+	gpio_t pin;			/*!< GPIO pin number */
+	io_t dir;			/*!< GPIO direction '0' IN;  '1' OUT*/
+} gpioConf_t;
 
 /*==================[internal functions declaration]=========================*/
+static void medirDistancia (void *pvParameter){
+    while(1){
+        if (SwitchesRead() != SWITCH_2){
+            distancia = HcSr04ReadDistanceInCentimeters();
+        }
+
+        vTaskDelay(TIEMPO_MEDICION / portTICK_PERIOD_MS);
+    }
+}
+
+static void mostrarDistancia(void *pvParameter){
+    while(1){
+        if (SwitchesRead() != SWITCH_1)
+             LcdItsE0803Write(distancia);
+
+        else LcdItsE0803Off();
+
+        vTaskDelay(TIEMPO_REFRESCO_PANTALLA / portTICK_PERIOD_MS);
+    }
+} 
+
+static void manejoDeLEDs(void *pvParameter){
+    while(1){
+        if (SwitchesRead() != SWITCH_1){
+            if (distancia<10){
+                LedsOffAll();
+            }
+
+            if ((distancia<20) && (distancia>=10)){
+                LedOn(LED_1);
+                LedOff(LED_2);
+                LedOff(LED_3);
+            }
+
+            if((distancia<30) && (distancia>=20)){
+                LedOn(LED_1);
+
+                LedOn(LED_2);
+                LedOff(LED_3);
+            }
+
+            if(30<=distancia){
+                LedOn(LED_1);
+
+                LedOn(LED_2);
+
+                LedOn(LED_3);
+
+            }
+        }
+        else LedsOffAll();
+    
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+}
 
 /*==================[external functions definition]==========================*/
 void app_main(void){
-	LedsInit();
-    xTaskCreate(&Led1Task, "LED_1", 512, NULL, 5, NULL); // (funcion, espacio asignado, NULL, prioridad, NULL)
-    xTaskCreate(&Led2Task, "LED_2", 512, NULL, 5, NULL);
-    xTaskCreate(&Led3Task, "LED_3", 512, NULL, 5, NULL);
+	// Inicializacion
+    SwitchesInit();
+    HcSr04Init(GPIO_3, GPIO_2);
+    LedsInit();
+    LcdItsE0803Init();
+
+    // Creacion de tareas
+    xTaskCreate(&medirDistancia, "Medicion", 2048, NULL, 5, NULL);
+    xTaskCreate(&mostrarDistancia, "Mostrar", 512, NULL, 5, NULL);
+    xTaskCreate(&manejoDeLEDs, "LEDs", 512, NULL, 5, NULL);
 }
 /*==================[end of file]============================================*/

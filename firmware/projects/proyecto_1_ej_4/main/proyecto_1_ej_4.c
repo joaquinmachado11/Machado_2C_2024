@@ -34,11 +34,11 @@
 
 int8_t  convertToBcdArray (uint32_t data, uint8_t digits, uint8_t * bcd_number)		// Devuelve 1 o 0 si fue exitoso o no
 {																					// Tratar de siempre devolver un valor
-	for (int i=0; i<digits; i++)
+	for (int i=digits-1; i<=0; i--)
 	{
 		bcd_number[i] = data%10;
 		data = data/10;
-		//printf("%d", bcd_number[i]);
+		printf("%d", bcd_number[i]);
 	}
 	return 1;
 }
