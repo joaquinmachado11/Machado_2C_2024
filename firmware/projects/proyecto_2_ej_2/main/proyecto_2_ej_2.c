@@ -2,15 +2,8 @@
  *
  * @section genDesc General Description
  *
- * 1) Muestra la distancia medida con un sensor de ultrasonido utilizando los leds de la siguiente manera:
- * 	- Si la distancia es menor a 10 cm, apagar todos los LEDs.
- * 	- Si la distancia está entre 10 y 20 cm, encender el LED_1.
- * 	- Si la distancia está entre 20 y 30 cm, encender el LED_2 y LED_1.
- * 	- Si la distancia es mayor a 30 cm, encender el LED_3, LED_2 y LED_1.
- * 2) Muestra el valor de distancia en cm utilizando el display LCD.
- * 3) TEC1 activa y detiene la medición.
- * 4) TEC2 mantiene el resultado (“HOLD”).
- * 5) Refresco de medición: 1 s
+ * Nuevo proyecto en el que se modifiqua la actividad del punto 1 de manera de utilizar 
+ * interrupciones para el control de las teclas y el control de tiempos (Timers). 
  *
  * @section hardConn Hardware Connection
  *
@@ -38,6 +31,7 @@
 #include "hc_sr04.h"
 #include "lcditse0803.h"
 #include "switch.h"
+#include "timer_mcu.h"
 /*==================[macros and definitions]=================================*/
 
 /** @brief Intervalo de tiempo para refrescar la pantalla (en ms) */
@@ -55,21 +49,57 @@ bool estadoS1 = false;
 /** @brief Estado del switch 2 */
 bool estadoS2 = false;
 
-/*==================[internal data definition]===============================*/
+/** @brief Handle para la tarea asociada a la pantalla */
+TaskHandle_t pantalla_task_handle = NULL;
 
+/** @brief Handle para la tarea asociada a la medición */
+TaskHandle_t medicion_task_handle = NULL;
+
+/** @brief Handle para la tarea asociada al manejo de LEDs */
+TaskHandle_t leds_task_handle = NULL;
+
+/*==================[internal data definition]===============================*/
 /*==================[internal functions declaration]=========================*/
+
+/**
+ * @brief Función que notifica a la tarea de la pantalla.
+ * 
+ * Se llama desde una interrupción para notificar a la tarea que maneja la pantalla.
+ */
+void funcTimerPantalla(){
+    vTaskNotifyGiveFromISR(pantalla_task_handle, pdFALSE); /* Envía una notificación a la tarea asociada a pantalla */
+}
+
+/**
+ * @brief Función que notifica a la tarea de medición.
+ * 
+ * Se llama desde una interrupción para notificar a la tarea que realiza la medición de distancia.
+ */
+void funcTimerMedir(){
+    vTaskNotifyGiveFromISR(medicion_task_handle, pdFALSE);
+}
+
+/**
+ * @brief Función que notifica a la tarea de manejo de LEDs.
+ * 
+ * Se llama desde una interrupción para notificar a la tarea que controla el encendido y apagado de los LEDs.
+ */
+void funcTimerLEDs(){
+    vTaskNotifyGiveFromISR(leds_task_handle, pdFALSE);
+}
 
 /**
  * @brief Función para medir la distancia utilizando el sensor HcSr04.
  * 
- * Esta tarea se ejecuta en un bucle infinito. Si se detecta el estado del switch 2,
- * alterna su estado. Si el switch 2 está desactivado, mide la distancia utilizando
- * el sensor HcSr04 y la almacena en la variable `distancia`.
+ * Esta tarea espera una notificación antes de realizar una medición. Si se detecta un cambio en el switch 2, 
+ * alterna su estado. Si el switch 2 está desactivado, mide la distancia utilizando el sensor HcSr04.
  * 
  * @param[in] pvParameter Parámetro no utilizado.
  */
 static void medirDistancia (void *pvParameter){
     while(1){
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
+
         if (SwitchesRead() == SWITCH_2){
             estadoS2 = !estadoS2;
         }
@@ -78,21 +108,21 @@ static void medirDistancia (void *pvParameter){
         
         else
             distancia = HcSr04ReadDistanceInCentimeters(); 
-
-        vTaskDelay(TIEMPO_MEDICION / portTICK_PERIOD_MS);
     }
 }
 
 /**
  * @brief Función para mostrar la distancia medida en la pantalla LCD.
  * 
- * Esta tarea se ejecuta en un bucle infinito. Si se activa el switch 1, apaga la pantalla.
+ * Esta tarea espera una notificación antes de ejecutar el código. Si se activa el switch 1, apaga la pantalla.
  * Si el switch está desactivado, muestra la distancia medida en la pantalla LCD.
  * 
  * @param[in] pvParameter Parámetro no utilizado.
  */
 static void mostrarDistancia(void *pvParameter){
     while(1){
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
+
         if (SwitchesRead() == SWITCH_1){
             estadoS1 = !estadoS1;
         }
@@ -102,15 +132,14 @@ static void mostrarDistancia(void *pvParameter){
         
         else
             LcdItsE0803Write(distancia);
-
-        vTaskDelay(TIEMPO_REFRESCO_PANTALLA / portTICK_PERIOD_MS);
     }
-}
+} 
 
 /**
  * @brief Función para gestionar el encendido y apagado de los LEDs en función de la distancia medida.
  * 
- * Si el switch 1 está desactivado, esta tarea enciende o apaga los LEDs dependiendo de la distancia medida.
+ * La tarea espera una notificación antes de ejecutar el código. Si el switch 1 está desactivado, 
+ * enciende o apaga los LEDs dependiendo de la distancia medida:
  * - Si la distancia es menor a 10, se apagan todos los LEDs.
  * - Si la distancia está entre 10 y 20, se enciende solo el LED 1.
  * - Si la distancia está entre 20 y 30, se encienden los LEDs 1 y 2.
@@ -119,6 +148,8 @@ static void mostrarDistancia(void *pvParameter){
  * @param[in] pvParameter Parámetro no utilizado.
  */
 static void manejoDeLEDs(void *pvParameter){
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
+
     while(1){
         if (estadoS1 == false){
             if (distancia < 10){
@@ -146,8 +177,6 @@ static void manejoDeLEDs(void *pvParameter){
         else {
             LedsOffAll();
         }
-    
-        vTaskDelay(300 / portTICK_PERIOD_MS);
     }
 }
 
@@ -156,20 +185,50 @@ static void manejoDeLEDs(void *pvParameter){
 /**
  * @brief Función principal de la aplicación.
  * 
- * Inicializa los periféricos y crea las tareas para medir la distancia, mostrarla en la pantalla
- * y gestionar los LEDs en función de la distancia.
+ * Inicializa los periféricos, configura los timers y crea las tareas para medir la distancia, mostrarla en la pantalla
+ * y gestionar los LEDs en función de la distancia. 
+ * 
+ * También inicializa y arranca los timers que enviarán notificaciones a las tareas correspondientes.
  */
 void app_main(void){
-	// Inicializacion
+	// Inicializacion de periféricos
     SwitchesInit();
     HcSr04Init(GPIO_3, GPIO_2);
     LedsInit();
     LcdItsE0803Init();
 
-    // Creacion de tareas
-    xTaskCreate(&medirDistancia, "Medicion", 2048, NULL, 5, NULL);
-    xTaskCreate(&mostrarDistancia, "Mostrar", 512, NULL, 5, NULL);
-    xTaskCreate(&manejoDeLEDs, "LEDs", 512, NULL, 5, NULL);
-}
+    // Inicialización de timers 
+    timer_config_t timer_pantalla = {
+        .timer = TIMER_A,
+        .period = TIEMPO_REFRESCO_PANTALLA,
+        .func_p = FuncTimerA,
+        .param_p = NULL
+    };
+    TimerInit(&timer_pantalla);
 
+    timer_config_t timer_medicion = {
+        .timer = TIMER_B,
+        .period = TIEMPO_MEDICION,
+        .func_p = FuncTimerB,
+        .param_p = NULL
+    };
+    TimerInit(&timer_medicion);
+
+    timer_config_t timer_leds = {
+        .timer = TIMER_C,
+        .period = 300,
+        .func_p = FuncTimerC,
+        .param_p = NULL
+    };
+    TimerInit(&timer_leds);
+
+    // Creacion de tareas
+    xTaskCreate(&medirDistancia, "Medicion", 2048, NULL, 5, &medicion_task_handle);
+    xTaskCreate(&mostrarDistancia, "Mostrar", 512, NULL, 5, &pantalla_task_handle);
+    xTaskCreate(&manejoDeLEDs, "LEDs", 512, NULL, 5, &leds_task_handle);
+
+    // Inicio de los timers
+    TimerStart(timer_pantalla.timer);
+    TimerStart(timer_medicion.timer);
+}
 /*==================[end of file]============================================*/
