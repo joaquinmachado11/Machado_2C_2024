@@ -8,8 +8,11 @@
  * @section hardConn Hardware Connection
  *
  * |    EDU-CIAA-NXP  |   PERIFERICO   	|
- * |:--------------:|:--------------|
- * | 	PIN_X	 	| 	GPIO_X		|
+ * |:----------------:|:----------------|
+ * | 	  GPIO_2      |     TRIGGER		|
+ * | 	  GPIO_3      |      ECHO		|
+ * | 	  +5V         |      +5V		|
+ * | 	  GND         |      GND	    |
  *
  *
  * @section changelog Changelog
