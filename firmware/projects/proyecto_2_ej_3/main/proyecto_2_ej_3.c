@@ -1,25 +1,25 @@
-/*! @mainpage Proyecto 2 ejercicio 1
+/*! @mainpage Template
  *
  * @section genDesc General Description
- *
- * Nuevo proyecto en el que se modifiqua la actividad del punto 1 de manera de utilizar 
- * interrupciones para el control de las teclas y el control de tiempos (Timers). 
+ * Nuevo proyecto en el que modifique la actividad del punto 2 agregando ahora el puerto serie. 
+ * Con las teclas “O” y “H”, replicar la funcionalidad de las teclas 1 y 2 de los puntos anteriores.
+ * Usar “I” para cambiar la unidad de trabajo de “cm” a “pulgadas”
+ * Usar “M” para implementar la visualización del máximo
  *
  * @section hardConn Hardware Connection
  *
- * |    EDU-CIAA-NXP  |   PERIFERICO   	|
- * |:----------------:|:----------------|
- * | 	  GPIO_2      |     TRIGGER		|
- * | 	  GPIO_3      |      ECHO		|
- * | 	  +5V         |      +5V		|
- * | 	  GND         |      GND	    |
- *
+ * |    Peripheral  |   ESP32   	|
+ * |:--------------:|:--------------|
+ * | 	  GPIO_2    |     TRIGGER	|
+ * | 	  GPIO_3    |      ECHO		|
+ * | 	  +5V       |      +5V		|
+ * | 	  GND       |      GND	    |
  *
  * @section changelog Changelog
  *
  * |   Date	    | Description                                    |
  * |:----------:|:-----------------------------------------------|
- * | 12/09/2023 | Document creation		                         |
+ * | 19/09/2024 | Document creation		                         |
  *
  * @author Joaquin Machado (joaquin.machado@ingenieria.uner.edu.ar)
  *
@@ -35,6 +35,7 @@
 #include "lcditse0803.h"
 #include "switch.h"
 #include "timer_mcu.h"
+#include "uart_mcu.h"
 /*==================[macros and definitions]=================================*/
 /** @brief Constante para indicar el estado encendido. */
 #define ON 1
@@ -62,6 +63,16 @@ TaskHandle_t pantalla_task_handle = NULL;
 
 /** @brief Handle para la tarea asociada a la medición */
 TaskHandle_t medicion_task_handle = NULL;
+
+TaskHandle_t uart_task_handle = NULL;
+
+uint8_t dato_tecla;
+
+const char string[10];
+const char unidad[3] = "cm";
+
+bool inCm = true;
+bool inIn = false;
 
 /*==================[internal data definition]===============================*/
 /*==================[internal functions declaration]=========================*/
@@ -92,6 +103,14 @@ void funcTimerMedir(){
     vTaskNotifyGiveFromISR(medicion_task_handle, pdFALSE);
 }
 
+void funcTimerUART(){
+    vTaskNotifyGiveFromISR(uart_task_handle, pdFALSE);
+}
+
+const void generarString(){
+    snprintf(string, sizeof(string), "%03d %s\r\n", distancia, unidad);
+}
+
 /**
  * @brief Función para medir la distancia utilizando el sensor HcSr04.
  * 
@@ -104,12 +123,13 @@ static void medirDistancia (void *pvParameter){
     while(1){
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
 
-        if (estadoS2 == ON){}
-        
-        else
+        if (estadoS2 == OFF){
             distancia = HcSr04ReadDistanceInCentimeters(); 
+            generarString();
+        }
     }
 }
+
 
 /**
  * @brief Función para mostrar la distancia medida en la pantalla LCD.
@@ -125,6 +145,7 @@ static void mostrarDistancia(void *pvParameter){
 
         if (estadoS1 == OFF) {
             LcdItsE0803Write(distancia);
+            //UartSendString(UART_PC, string);
 
             if (distancia < 10) {
                 LedsOffAll();
@@ -148,6 +169,26 @@ static void mostrarDistancia(void *pvParameter){
     }
 } 
 
+static void uart_in(void *pvParameter){
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY); 
+    
+    UartReadByte(UART_PC, dato_tecla);
+    switch (dato_tecla){
+        case 'O':
+            estadoS1 =! estadoS1;
+            break;
+        case 'o':
+            estadoS1 =! estadoS1;
+            break;
+        
+        case 'H':
+            estadoS2 =! estadoS2;
+            break;
+        case 'h':
+            estadoS2 =! estadoS2;
+            break;
+    }
+}
 /*==================[external functions definition]==========================*/
 
 /**
@@ -164,6 +205,15 @@ void app_main(void){
     HcSr04Init(GPIO_3, GPIO_2);
     LedsInit();
     LcdItsE0803Init();
+
+    // Inicializacion de UART
+    serial_config_t uart = {
+        .port = UART_PC,
+        .baud_rate = 9600,
+        .func_p = uart_in,
+        .param_p = NULL
+    };
+    UartInit(&uart);
 
     // Inicialización de timers 
     timer_config_t timer_pantalla = {
@@ -182,11 +232,18 @@ void app_main(void){
     };
     TimerInit(&timer_medicion);
 
+    timer_config_t timer_uart = {
+        .timer = TIMER_C,
+        .period = TIEMPO_MEDICION,
+        .func_p = funcTimerUART,
+        .param_p = NULL
+    };
+    TimerInit(&timer_uart);
 
     // Creacion de tareas
     xTaskCreate(&medirDistancia, "Medicion", 2048, NULL, 5, &medicion_task_handle);
     xTaskCreate(&mostrarDistancia, "Mostrar", 512, NULL, 5, &pantalla_task_handle);
-    
+    xTaskCreate(&uart_in, "UART", 2048, NULL, 5, &uart_task_handle);
 
     // Inicio interrupcion de switches SwitchActivInt(switch_t sw, void *ptr_int_func, void *args)
     SwitchActivInt(SWITCH_1, *evento_switch1, NULL);
@@ -195,5 +252,6 @@ void app_main(void){
     // Inicio de los timers
     TimerStart(timer_pantalla.timer);
     TimerStart(timer_medicion.timer);
+    TimerStart(timer_uart.timer);
 }
 /*==================[end of file]============================================*/

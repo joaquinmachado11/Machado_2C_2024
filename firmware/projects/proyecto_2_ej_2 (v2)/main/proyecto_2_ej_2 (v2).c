@@ -211,4 +211,5 @@ void app_main(void) {
     // Inicio de los timers
     TimerStart(timer_pantalla.timer);
     TimerStart(timer_medicion.timer);
+    TimerStart(timer_teclas.timer);
 }
