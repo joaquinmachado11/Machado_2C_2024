@@ -64,11 +64,9 @@ TaskHandle_t pantalla_task_handle = NULL;
 /** @brief Handle para la tarea asociada a la medición */
 TaskHandle_t medicion_task_handle = NULL;
 
-TaskHandle_t uart_task_handle = NULL;
-
 uint8_t dato_tecla;
 
-const char string[10];
+const char string[11];
 const char unidad[3] = "cm";
 
 bool inCm = true;
@@ -103,12 +101,9 @@ void funcTimerMedir(){
     vTaskNotifyGiveFromISR(medicion_task_handle, pdFALSE);
 }
 
-void funcTimerUART(){
-    vTaskNotifyGiveFromISR(uart_task_handle, pdFALSE);
-}
-
 const void generarString(){
-    snprintf(string, sizeof(string), "%03d %s\r\n", distancia, unidad);
+    //snprintf(string, sizeof(string), "%03d %s\r\n", distancia, unidad);
+    //string = (const char)UartItoa(distancia, 10);
 }
 
 /**
@@ -123,13 +118,14 @@ static void medirDistancia (void *pvParameter){
     while(1){
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
 
-        if (estadoS2 == OFF){
-            distancia = HcSr04ReadDistanceInCentimeters(); 
-            generarString();
+        if (estadoS2 == ON){}
+        
+        else {
+            distancia = HcSr04ReadDistanceInCentimeters();
+            //generarString();
         }
     }
 }
-
 
 /**
  * @brief Función para mostrar la distancia medida en la pantalla LCD.
@@ -142,10 +138,14 @@ static void medirDistancia (void *pvParameter){
 static void mostrarDistancia(void *pvParameter){
     while(1){
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
+        //UartSendString(UART_PC, "Prueba");
 
         if (estadoS1 == OFF) {
             LcdItsE0803Write(distancia);
-            //UartSendString(UART_PC, string);
+            UartSendString(UART_PC, (char*)UartItoa(distancia, 10));
+            UartSendString(UART_PC, " ");
+            UartSendString(UART_PC, unidad);
+            UartSendString(UART_PC, "\n");
 
             if (distancia < 10) {
                 LedsOffAll();
@@ -169,10 +169,8 @@ static void mostrarDistancia(void *pvParameter){
     }
 } 
 
-static void uart_in(void *pvParameter){
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY); 
-    
-    UartReadByte(UART_PC, dato_tecla);
+void uart_in(){
+    UartReadByte(UART_PC, &dato_tecla);
     switch (dato_tecla){
         case 'O':
             estadoS1 =! estadoS1;
@@ -232,18 +230,9 @@ void app_main(void){
     };
     TimerInit(&timer_medicion);
 
-    timer_config_t timer_uart = {
-        .timer = TIMER_C,
-        .period = TIEMPO_MEDICION,
-        .func_p = funcTimerUART,
-        .param_p = NULL
-    };
-    TimerInit(&timer_uart);
-
     // Creacion de tareas
     xTaskCreate(&medirDistancia, "Medicion", 2048, NULL, 5, &medicion_task_handle);
     xTaskCreate(&mostrarDistancia, "Mostrar", 512, NULL, 5, &pantalla_task_handle);
-    xTaskCreate(&uart_in, "UART", 2048, NULL, 5, &uart_task_handle);
 
     // Inicio interrupcion de switches SwitchActivInt(switch_t sw, void *ptr_int_func, void *args)
     SwitchActivInt(SWITCH_1, *evento_switch1, NULL);
@@ -252,6 +241,5 @@ void app_main(void){
     // Inicio de los timers
     TimerStart(timer_pantalla.timer);
     TimerStart(timer_medicion.timer);
-    TimerStart(timer_uart.timer);
 }
 /*==================[end of file]============================================*/
