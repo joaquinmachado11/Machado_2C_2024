@@ -34,26 +34,54 @@
 #include "freertos/task.h"
 #include "timer_mcu.h"
 /*==================[macros and definitions]=================================*/
-#define BUFFER_SIZE 231
-#define FREC_DE_MUESTREO 20000 // 500 Hz en useg
-uint16_t voltaje; // en mV
+/** @def FREC_DE_MUESTREO
+ *  @brief Frecuencia de muestreo, expresada en microsegundos.
+ *  @details Equivale a 500 Hz.
+ */
+#define FREC_DE_MUESTREO 20000
+
+/** @var voltaje
+ *  @brief Valor del voltaje leído del canal analógico en milivoltios.
+ */
+uint16_t voltaje;
+
 /*==================[internal data definition]===============================*/
+
+/** @var ADC_task_handle
+ *  @brief Manejador de la tarea de conversión ADC.
+ */
 TaskHandle_t ADC_task_handle = NULL;
+
 /*==================[internal functions declaration]=========================*/
+
+/**
+ * @brief Notifica a la tarea ADC desde la interrupción del temporizador.
+ * @details Esta función se llama desde una rutina de interrupción y
+ *          notifica a la tarea ADC para que procese la siguiente lectura.
+ */
 void funcTimerADC(){
     vTaskNotifyGiveFromISR(ADC_task_handle, pdFALSE);
 }
 
-static void ADC_convert (void *pvParameter){ // conversion adc
+/**
+ * @brief Función de conversión ADC.
+ * @param pvParameter Parámetro pasado a la tarea (no utilizado).
+ * @details Lee un valor analógico del canal 1 y lo envía al monitor serial en formato legible 
+ *          por un ploter descargado desde VS Code.
+ */
+static void ADC_convert(void *pvParameter){ 
     while(1){
+        // Espera a ser notificada por la interrupción del temporizador
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-		AnalogInputReadSingle(CH1, &voltaje);
+        
+        // Lee el valor del canal analógico y lo almacena en la variable voltaje
+        AnalogInputReadSingle(CH1, &voltaje);
 
-		// Muestro los datos por serial monitor con el formato que interpreta el ploter descargado desde VS Code
-		UartSendString(UART_PC, ">Analog In: ");
-		UartSendString(UART_PC, (char*)UartItoa(voltaje, 10));
-		UartSendString(UART_PC, "\r\n");
-	}
+        // Envío de los datos al monitor serial
+        UartSendString(UART_PC, ">Analog In: ");
+        UartSendString(UART_PC, (char*)UartItoa(voltaje, 10));
+        UartSendString(UART_PC, "\r\n");
+    }
 }
 
 /*==================[external functions definition]==========================*/

@@ -32,15 +32,49 @@
 #include "freertos/task.h"
 #include "timer_mcu.h"
 /*==================[macros and definitions]=================================*/
+/** @def BUFFER_SIZE
+ *  @brief Tamaño del buffer para almacenar la señal de ECG.
+ */
 #define BUFFER_SIZE 231
-#define FREC_DE_MUESTREO_DAC 20000 // 500 Hz en useg
-#define FREC_DE_MUESTREO_PLOTTER 10000 // 250 Hz en useg
-uint16_t voltaje; // en mV
+
+/** @def FREC_DE_MUESTREO_DAC
+ *  @brief Frecuencia de muestreo para el DAC, expresada en microsegundos.
+ *  @details Equivale a 500 Hz.
+ */
+#define FREC_DE_MUESTREO_DAC 20000
+
+/** @def FREC_DE_MUESTREO_PLOTTER
+ *  @brief Frecuencia de muestreo para el plotter, expresada en microsegundos.
+ *  @details Equivale a 250 Hz.
+ */
+#define FREC_DE_MUESTREO_PLOTTER 10000
+
+/** @var voltaje
+ *  @brief Valor del voltaje leído del canal analógico en milivoltios.
+ */
+uint16_t voltaje;
+
 /*==================[internal data definition]===============================*/
+
+/** @var i
+ *  @brief Índice para recorrer el buffer de la señal ECG.
+ */
 uint8_t i = 0;
+
+/** @var ADC_task_handle
+ *  @brief Manejador de la tarea de conversión ADC.
+ */
 TaskHandle_t ADC_task_handle = NULL;
+
+/** @var DAC_task_handle
+ *  @brief Manejador de la tarea de conversión DAC.
+ */
 TaskHandle_t DAC_task_handle = NULL;
 
+/** @var ecg
+ *  @brief Array que contiene los valores de la señal ECG.
+ *  @details Cada elemento representa un valor de la señal de ECG en una muestra.
+ */
 const char ecg[BUFFER_SIZE] = {
     76, 77, 78, 77, 79, 86, 81, 76, 84, 93, 85, 80,
     89, 95, 89, 85, 93, 98, 94, 88, 98, 105, 96, 91,
@@ -60,40 +94,57 @@ const char ecg[BUFFER_SIZE] = {
     99, 96, 102, 106, 99, 90, 92, 100, 87, 80, 82, 88, 77, 69, 75, 79,
     74, 67, 71, 78, 72, 67, 73, 81, 77, 71, 75, 84, 79, 77, 77, 76, 76,
 };
+
 /*==================[internal functions declaration]=========================*/
+
+/**
+ * @brief Notifica a la tarea ADC desde la interrupción del temporizador.
+ */
 void funcTimerADC(){
     vTaskNotifyGiveFromISR(ADC_task_handle, pdFALSE);
 }
 
+/**
+ * @brief Notifica a la tarea DAC desde la interrupción del temporizador.
+ */
 void funcTimerDAC(){
     vTaskNotifyGiveFromISR(DAC_task_handle, pdFALSE);
 }
 
-static void DAC_convert(void *pvParameter){ // conversion DAC
-	while(1){
+/**
+ * @brief Función de conversión DAC.
+ * @param pvParameter Parámetro pasado a la tarea (no utilizado).
+ * @details Realiza la conversión digital a analógica utilizando los valores del array `ecg`.
+ *          La tarea espera una notificación para proceder con la conversión.
+ */
+static void DAC_convert(void *pvParameter){ 
+    while(1){
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         AnalogOutputWrite((uint8_t) ecg[i]);
-	    i = i + 1;
+        i = i + 1;
 
-	    if (i == BUFFER_SIZE)
-		    i = 0;
+        if (i == BUFFER_SIZE)
+            i = 0;
     }
 }
 
-static void ADC_convert (void *pvParameter){ // conversion ADC
+/**
+ * @brief Función de conversión ADC.
+ * @param pvParameter Parámetro pasado a la tarea (no utilizado).
+ * @details Lee un valor analógico del canal 1 y lo envía al monitor serial en formato legible 
+ *          por un ploter descargado desde VS Code.
+ */
+static void ADC_convert(void *pvParameter){ 
     while(1){
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-		AnalogInputReadSingle(CH1, &voltaje);
+        AnalogInputReadSingle(CH1, &voltaje);
 
-		// Muestro los datos por serial monitor con el formato que interpreta el ploter descargado desde VS Code
-		
+        // Envío de los datos al monitor serial
         UartSendString(UART_PC, ">ECG: ");
-		UartSendString(UART_PC, (char*)UartItoa(voltaje, 10));
-		UartSendString(UART_PC, "\r\n");
-        
-       //printf(">ECG: %d, da: %d\r\n", voltaje, ecg[i]);
-	}
+        UartSendString(UART_PC, (char*)UartItoa(voltaje, 10));
+        UartSendString(UART_PC, "\r\n");
+    }
 }
 
 /*==================[external functions definition]==========================*/

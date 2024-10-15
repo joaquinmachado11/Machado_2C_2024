@@ -36,109 +36,143 @@
 #include "switch.h"
 #include "timer_mcu.h"
 #include "uart_mcu.h"
+/**
+ * @file    distance_measurement.c
+ * @brief   Implementación de medición de distancia y control de pantalla con FreeRTOS.
+ * @details Este archivo contiene las definiciones y funciones para medir la distancia con un
+ *          sensor HcSr04 y mostrarla en una pantalla LCD, utilizando tareas de FreeRTOS.
+ */
+
 /*==================[macros and definitions]=================================*/
-/** @brief Constante para indicar el estado encendido. */
+
+/** @def ON
+ *  @brief Constante para indicar el estado encendido.
+ */
 #define ON 1
 
-/** @brief Constante para indicar el estado apagado. */
+/** @def OFF
+ *  @brief Constante para indicar el estado apagado.
+ */
 #define OFF 0
 
-/** @brief Intervalo de tiempo para refrescar la pantalla (en us) */
+/** @def TIEMPO_REFRESCO_PANTALLA
+ *  @brief Intervalo de tiempo para refrescar la pantalla, en microsegundos.
+ */
 #define TIEMPO_REFRESCO_PANTALLA 500000
 
-/** @brief Intervalo de tiempo para realizar mediciones (en us) */
+/** @def TIEMPO_MEDICION
+ *  @brief Intervalo de tiempo para realizar mediciones, en microsegundos.
+ */
 #define TIEMPO_MEDICION 1000000
 
-/** @brief Variable que almacena la distancia medida */
+/** @var distancia
+ *  @brief Variable que almacena la distancia medida por el sensor, en centímetros.
+ */
 uint16_t distancia;
 
-/** @brief Estado del switch 1 */
+/** @var estadoS1
+ *  @brief Estado del switch 1, utilizado para encender o apagar la pantalla.
+ */
 bool estadoS1 = false;
 
-/** @brief Estado del switch 2 */
+/** @var estadoS2
+ *  @brief Estado del switch 2, utilizado para activar o desactivar la medición.
+ */
 bool estadoS2 = false;
 
-/** @brief Handle para la tarea asociada a la pantalla */
+/** @var pantalla_task_handle
+ *  @brief Manejador de la tarea asociada a la pantalla.
+ */
 TaskHandle_t pantalla_task_handle = NULL;
 
-/** @brief Handle para la tarea asociada a la medición */
+/** @var medicion_task_handle
+ *  @brief Manejador de la tarea asociada a la medición.
+ */
 TaskHandle_t medicion_task_handle = NULL;
 
+/** @var dato_tecla
+ *  @brief Variable que almacena el dato leído del teclado.
+ */
 uint8_t dato_tecla;
 
+/** @var string
+ *  @brief Buffer para almacenar la cadena generada con la distancia y la unidad.
+ */
 const char string[11];
+
+/** @var unidad
+ *  @brief Cadena que representa la unidad de medida utilizada, en este caso "cm".
+ */
 const char unidad[3] = "cm";
 
+/** @var inCm
+ *  @brief Indica si la medición está en centímetros.
+ */
 bool inCm = true;
+
+/** @var inIn
+ *  @brief Indica si la medición está en pulgadas.
+ */
 bool inIn = false;
 
 /*==================[internal data definition]===============================*/
 /*==================[internal functions declaration]=========================*/
 
+/**
+ * @brief Alterna el estado del switch 1.
+ * @details Cambia el estado de encendido/apagado para controlar la pantalla.
+ */
 static void evento_switch1(){
-    estadoS1 =! estadoS1;
+    estadoS1 = !estadoS1;
 }
 
+/**
+ * @brief Alterna el estado del switch 2.
+ * @details Cambia el estado de activación/desactivación para controlar la medición.
+ */
 static void evento_switch2(){
-    estadoS2 =! estadoS2;
+    estadoS2 = !estadoS2;
 }
 
 /**
  * @brief Función que notifica a la tarea de la pantalla.
- * 
- * Se llama desde una interrupción para notificar a la tarea que maneja la pantalla.
+ * @details Se llama desde una interrupción para notificar a la tarea que maneja la pantalla.
  */
 void funcTimerPantalla(){
-    vTaskNotifyGiveFromISR(pantalla_task_handle, pdFALSE); /* Envía una notificación a la tarea asociada a pantalla */
+    vTaskNotifyGiveFromISR(pantalla_task_handle, pdFALSE);
 }
 
 /**
  * @brief Función que notifica a la tarea de medición.
- * 
- * Se llama desde una interrupción para notificar a la tarea que realiza la medición de distancia.
+ * @details Se llama desde una interrupción para notificar a la tarea que realiza la medición de distancia.
  */
 void funcTimerMedir(){
     vTaskNotifyGiveFromISR(medicion_task_handle, pdFALSE);
 }
 
-const void generarString(){
-    //snprintf(string, sizeof(string), "%03d %s\r\n", distancia, unidad);
-    //string = (const char)UartItoa(distancia, 10);
-}
-
 /**
  * @brief Función para medir la distancia utilizando el sensor HcSr04.
- * 
- * Esta tarea espera una notificación antes de realizar una medición. Si se detecta un cambio en el switch 2, 
- * alterna su estado. Si el switch 2 está desactivado, mide la distancia utilizando el sensor HcSr04.
- * 
  * @param[in] pvParameter Parámetro no utilizado.
  */
-static void medirDistancia (void *pvParameter){
+static void medirDistancia(void *pvParameter){
     while(1){
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        if (estadoS2 == ON){}
-        
-        else {
+        if (estadoS2 == ON) {
+            // Si el switch 2 está encendido, no se mide la distancia
+        } else {
             distancia = HcSr04ReadDistanceInCentimeters();
-            //generarString();
         }
     }
 }
 
 /**
- * @brief Función para mostrar la distancia medida en la pantalla LCD.
- * 
- * Esta tarea espera una notificación antes de ejecutar el código. Si se activa el switch 1, apaga la pantalla.
- * Si el switch está desactivado, muestra la distancia medida en la pantalla LCD.
- * 
+ * @brief Función para mostrar la distancia medida en la pantalla LCD y manejo de LEDs.
  * @param[in] pvParameter Parámetro no utilizado.
  */
 static void mostrarDistancia(void *pvParameter){
     while(1){
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
-        //UartSendString(UART_PC, "Prueba");
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         if (estadoS1 == OFF) {
             LcdItsE0803Write(distancia);
@@ -167,26 +201,27 @@ static void mostrarDistancia(void *pvParameter){
             LedsOffAll();
         }
     }
-} 
+}
 
+/**
+ * @brief Maneja la entrada de datos del teclado.
+ * @details Lee un byte desde el puerto serie y cambia el estado de los switches según el valor recibido.
+ */
 void uart_in(){
     UartReadByte(UART_PC, &dato_tecla);
     switch (dato_tecla){
         case 'O':
-            estadoS1 =! estadoS1;
-            break;
         case 'o':
-            estadoS1 =! estadoS1;
+            estadoS1 = !estadoS1;
             break;
-        
+
         case 'H':
-            estadoS2 =! estadoS2;
-            break;
         case 'h':
-            estadoS2 =! estadoS2;
+            estadoS2 = !estadoS2;
             break;
     }
 }
+
 /*==================[external functions definition]==========================*/
 
 /**
