@@ -142,7 +142,7 @@ static void enviarAdvertencia(){
 
 /** @brief  Funcion que maneja el prendido y apagado de los buzzer */
 static void prenderBuzzer(){
-	
+	// Me quede sin tiempo para pensar como prender el buzzer
 }
 
 /**
