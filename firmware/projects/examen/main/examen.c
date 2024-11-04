@@ -2,18 +2,41 @@
  *
  * @section genDesc General Description
  *
- * Se pretende diseñar un dispositivo basado en la ESP-EDU que permita detectar 
- * eventos peligrosos para ciclistas.  El sistema está compuesto por un acelerómetro analógico montado sobre el casco y un
- * HC-SR04 ubicado en la parte trasera de la bicicleta.
- *  Se indicará mediante los leds de la placa la distancia de los vehículos a la bicicleta.
- * Además activa una alarma sonora mediante un buzzer activo en caso de precaucion y peligro.
+ * Se pretende diseñar un dispositivo basado en la ESP-EDU que permita detectar eventos peligrosos para ciclistas.  
+ * El sistema está compuesto por un acelerómetro analógico montado sobre el casco y un HC-SR04 ubicado en la parte trasera de la bicicleta.
+ * Se indicará mediante los leds de la placa la distancia de los vehículos a la bicicleta. Además activa una alarma sonora mediante un buzzer activo en caso de precaucion y peligro.
+ * A partir de un modulo BT  se envian datos de advertencia de proximidad y caida.
  *
  * @section hardConn Hardware Connection
  *
- * |    Peripheral  |   ESP32   	|
+ * |    BUZZER	    |   ESP32   	|
  * |:--------------:|:--------------|
- * | 	PIN_X	 	| 	GPIO_X		|
+ * | 	VCC	 		| 	GPIO_20		|
+ * | 	GND	 		| 	 GND		|
+ * 
+ * 
+ * |    HC-sr40	    |   ESP32   	|
+ * |:--------------:|:--------------|
+ * | 	  GPIO_2    |     TRIGGER	|
+ * | 	  GPIO_3    |      ECHO		|
+ * | 	  +5V       |      +5V		|
+ * | 	  GND       |      GND	    |
+ * 
+ * 
+ * |    HC-05	    |   ESP32   	|
+ * |:--------------:|:--------------|
+ * | 	VCC	 		| 	GPIO_20		|
+ * | 	GND	 		| 	 GND		|
+ * | 	USB	 		|  USB to UART	|
  *
+ * 
+ * |  Acelerometro	|   ESP32   	|
+ * |:--------------:|:--------------|
+ * | 	  out_x     |      CH1	    |
+ * | 	  out_y     |      CH2	    |
+ * | 	  out_z     |      CH3	    |
+ * | 	  VCC       |      VCC		|
+ * | 	  GND       |      GND	    |
  *
  * @section changelog Changelog
  *
@@ -39,34 +62,67 @@
 #include "buzzer.h"
 #include <analog_io_mcu.h> 
 /*==================[macros and definitions]=================================*/
-#define TIEMPO_MUESTREO_DISTANCIA 500 // en ms
-#define TIEMPO_MUESTREO_ACELEROMETRO 10 //en ms
-#define GPIO_BUZZER GPIO_20	// lo configuro desde aca segun donde conecto el buzzer
-#define CH_X CH1	// lo configuro desde aca segun donde conecto los cables del modulo BT (si o si tienen que ir a los CH)
+/** @def TIEMPO_MUESTREO_DISTANCIA
+ *  @brief Frecuencia de muestreo para el sensor ultrasonido, expresada en milisegundos.
+ */
+#define TIEMPO_MUESTREO_DISTANCIA 500
+/** @def TIEMPO_MUESTREO_DISTANCIA
+ *  @brief Frecuencia de muestreo para el acelerometro, expresada en milisegundos.
+ */
+#define TIEMPO_MUESTREO_ACELEROMETRO 10 
+/** @brief Variable que almacena el GPIO al que se conecta el buzzer */
+#define GPIO_BUZZER GPIO_20	
+/** @brief Variable que almacena el pin al que se conecta la aceleracion en X del acelerometro */
+#define CH_X CH1	
+/** @brief Variable que almacena el pin al que se conecta la aceleracion en Y del acelerometro */
 #define CH_Y CH2
+/** @brief Variable que almacena el pin al que se conecta la aceleracion en Z del acelerometro */
 #define CH_Z CH3
 /*==================[internal data definition]===============================*/
+/** @brief Handle de la tarea medir distancia */
 TaskHandle_t distancia_task_handle = NULL;
+/** @brief Handle de la tarea obtener aceleracion */
 TaskHandle_t aceleracion_task_handle = NULL;
+/** @brief Variable que almacena la aceleracion umbral a la que se considera una caida */
 uint8_t aceleracionDeCaida = 4; // [G]
-uint8_t tension_X;	// Tensiones que devuelve el acelerometro
+/** @brief Variable que almacena la tension devuelta por el acelerometro en X */
+uint8_t tension_X;	
+/** @brief Variable que almacena la tension devuelta por el acelerometro en Y */
 uint8_t tension_Y;
+/** @brief Variable que almacena la tension devuelta por el acelerometro en Z */
 uint8_t tension_Z;
-uint8_t tension_XYZ;	// Suma de las tensiones del acelerometro
-uint8_t distance2car;	// distancia al auto
-uint8_t sensibilidad = 0.3; // [V/G]
+/** @brief Variable que almacena la suma de tensiones devueltas por el acelerometro */
+uint8_t tension_XYZ;
+/** @brief  Distancia medida de la bicicleta al auto*/	
+uint8_t distance2car;	
+/** @brief  Sensibilidad del acelerometro en [V/G]*/	
+uint8_t sensibilidad = 0.3;
+/** @brief variable que sabe si hay caida */	
 bool hayCaida = false;
+/** @brief  Variable que sabe si hay que tener precaucion */	
 bool precaucion = false;
+/** @brief  variable que sabe si hay peligro*/	
 bool peligro = false;
 /*==================[internal functions declaration]=========================*/
+/**
+ * @brief Notifica a la tarea medir distancia desde la interrupción del temporizador.
+ * @details Esta función se llama desde una rutina de interrupción y
+ *          notifica a la tarea medir distancia para que procese la siguiente lectura.
+ */
 void funcTimerDistancia(){
-    vTaskNotifyGiveFromISR(distancia_task_handle, pdFALSE); /* Envía una notificación a la tarea asociada a pantalla */
+    vTaskNotifyGiveFromISR(distancia_task_handle, pdFALSE); 
 }
 
+/**
+ * @brief Notifica a la tarea obtener aceleracion desde la interrupción del temporizador.
+ * @details Esta función se llama desde una rutina de interrupción y
+ *          notifica a la tarea obtener aceleracion para que procese la siguiente lectura.
+ */
 void funcTimerAceleracion(){
     vTaskNotifyGiveFromISR(aceleracion_task_handle, pdFALSE);
 }
 
+/** @brief  Funcion que envia advertencia a traves del modulo BT */	
 static void enviarAdvertencia(){	
 	if (precaucion){
 		UartSendString(UART_CONNECTOR, "Precaución, vehículo cerca.");
@@ -84,10 +140,20 @@ static void enviarAdvertencia(){
 	}
 }
 
+/** @brief  Funcion que maneja el prendido y apagado de los buzzer */
+static void prenderBuzzer(){
+	
+}
+
+/**
+ * @brief Tarea que mide la distancia usando el sensor ultrasónico HC-SR04 y maneja los estados del LEDs, buzzer y envios de advertencia.
+ * La tarea espera una notificación antes de realizar la medición.
+ * @param pvParameter Parámetro de entrada (no utilizado).
+ */
 static void medirDistancia (void *pvParameter){		
     while(1){
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
-		distance2car = HcSr04ReadDistanceInCentimeters();
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    
+		distance2car = HcSr04ReadDistanceInCentimeters();	// en cm
 
 		if (distance2car > 500) {
             LedOn(LED_1);
@@ -100,6 +166,7 @@ static void medirDistancia (void *pvParameter){
             LedOn(LED_2);
             LedOff(LED_3);
 			enviarAdvertencia();
+			prenderBuzzer();
             } else 
 		if (distance2car < 300){
 			peligro = true;
@@ -107,17 +174,25 @@ static void medirDistancia (void *pvParameter){
             LedOn(LED_2);
             LedOn(LED_3);
 			enviarAdvertencia();
+			prenderBuzzer();
             }
         }
 	}
 
+/**
+ * @brief Convierte la suma de tensiones obtenidas por el acelerometro en un dato de aceleracion
+ */
 uint8_t tension2AcelerationConversion(){	
 	return tension_XYZ/sensibilidad;
 }
 
+/**
+ * @brief Tarea que mide la tensiones del acelerometro y detecta si hubo caida.
+ * @param pvParameter Parámetro de entrada (no utilizado).
+ */
 static void obtenerAceleracion (void *pvParameter){		
     while(1){
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);   
 		
 		AnalogInputReadSingle(CH_X, &tension_X);
 		AnalogInputReadSingle(CH_Y, &tension_Y);
@@ -137,7 +212,7 @@ void app_main(void){
 	// Inicializacion de periféricos
     HcSr04Init(GPIO_3, GPIO_2);
     LedsInit();
-	BuzzerInit(GPIO_BUZZER);
+	GPIOInit(GPIO_BUZZER, GPIO_OUTPUT);
 
 	// Configuracion de ADCs
 	analog_input_config_t analogInX = {
