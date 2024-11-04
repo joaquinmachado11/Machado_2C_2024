@@ -50,6 +50,9 @@
         },
         {
             "path": "projects/Proyecto_final"
+        },
+        {
+            "path": "projects/examen"
         }
     ],
     "settings": {
@@ -105,7 +108,8 @@
             "soc_caps.h": "c",
             "mpu6050.h": "c",
             "i2c_mcu.h": "c",
-            "random": "c"
+            "random": "c",
+            "cstdint": "c"
         },
     },
     "tasks": {
