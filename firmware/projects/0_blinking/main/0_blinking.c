@@ -37,5 +37,5 @@ void app_main(void){
         LedOff(LED_1);
         vTaskDelay(CONFIG_BLINK_PERIOD / portTICK_PERIOD_MS);
     }
-}
+} // Prueba de comit
 /*==================[end of file]============================================*/
