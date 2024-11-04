@@ -1,0 +1,25 @@
+var examen_8c =
+[
+    [ "CH_X", "examen_8c.html#a162ada542b328cafb0c957c9a2f1fd8e", null ],
+    [ "CH_Y", "examen_8c.html#adab56f62fa2b5305313ab1b101706da1", null ],
+    [ "CH_Z", "examen_8c.html#ac14a23152ef4fbd0c76e1463506f317a", null ],
+    [ "GPIO_BUZZER", "examen_8c.html#af7987f207dd9c6d153beed96f092cb65", null ],
+    [ "TIEMPO_MUESTREO_ACELEROMETRO", "examen_8c.html#a4681b051c67899c8211b216c2899d091", null ],
+    [ "TIEMPO_MUESTREO_DISTANCIA", "examen_8c.html#a850d390b08702a4f8f574456d90afaa3", null ],
+    [ "app_main", "examen_8c.html#a630544a7f0a2cc40d8a7fefab7e2fe70", null ],
+    [ "funcTimerAceleracion", "examen_8c.html#af070f8a2e17af6c3b1d4e2589f456432", null ],
+    [ "funcTimerDistancia", "examen_8c.html#afb0e6f5ea89324699639bfbf68aece0a", null ],
+    [ "tension2AcelerationConversion", "examen_8c.html#a6606c48fe0df6f1199ccd3a4b059232a", null ],
+    [ "aceleracion_task_handle", "examen_8c.html#a494ae1ea271a25577ee791ffdc81332d", null ],
+    [ "aceleracionDeCaida", "examen_8c.html#a6274624e15b2694e9f0129d34158038f", null ],
+    [ "distance2car", "examen_8c.html#a7cb4385cf18da501fe0eef2f7aa607bc", null ],
+    [ "distancia_task_handle", "examen_8c.html#abc6c430d8e9655d204baf6103a9c0f11", null ],
+    [ "hayCaida", "examen_8c.html#abce27293b5b6bb870c297f4703c77f10", null ],
+    [ "peligro", "examen_8c.html#a83a6bfc92dba7bc865965b7100013ef1", null ],
+    [ "precaucion", "examen_8c.html#a0719d169c7db9646e7e91cda85afc797", null ],
+    [ "sensibilidad", "examen_8c.html#a6ead579be7962cd30f6f8886ef13cbaf", null ],
+    [ "tension_X", "examen_8c.html#a2791c1dfddf8cabb2915bc18eadf68c4", null ],
+    [ "tension_XYZ", "examen_8c.html#a1de591b2e4af7650074bf491f3e4e25f", null ],
+    [ "tension_Y", "examen_8c.html#a8df1d424d3634a09fbfcf7cd78546e10", null ],
+    [ "tension_Z", "examen_8c.html#ae92b9fbffeb4c3f02a839edad8f11a78", null ]
+];
