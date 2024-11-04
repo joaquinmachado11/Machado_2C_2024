@@ -50,6 +50,10 @@ TaskHandle_t aceleracion_task_handle = NULL;
 uint8_t tension_X;	// Tensiones que devuelve el acelerometro
 uint8_t tension_Y;
 uint8_t tension_Z;
+uint8_t tension_XYZ;
+uint8_t distancia;
+uint8_t sensibilidad = 0.3; // V/G
+bool hayCaida = false;
 /*==================[internal functions declaration]=========================*/
 void funcTimerDistancia(){
     vTaskNotifyGiveFromISR(distancia_task_handle, pdFALSE); /* Envía una notificación a la tarea asociada a pantalla */
@@ -59,15 +63,57 @@ void funcTimerAceleracion(){
     vTaskNotifyGiveFromISR(aceleracion_task_handle, pdFALSE);
 }
 
+static void enviarAdvertencia(){
+	if (distancia < 500 && distancia > 300)
+		UartSendString(UART_CONNECTOR, "Precaución, vehículo cerca.");
+
+	if (distancia < 300)
+		UartSendString(UART_CONNECTOR, "Peligro, vehículo cerca.");
+
+	if (hayCaida){
+		hayCaida = false;
+		UartSendString(UART_CONNECTOR, "Caída detectada.");
+	}
+}
+
 static void medirDistancia (void *pvParameter){
     while(1){
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
+		distancia = HcSr04ReadDistanceInCentimeters();
+
+		if (distancia > 500) {
+            LedOn(LED_1);
+            LedOff(LED_2);
+            LedOff(LED_3);
+            } else 
+		if (distancia < 500 && distancia > 300) {
+            LedOn(LED_1);
+            LedOn(LED_2);
+            LedOff(LED_3);
+			enviarAdvertencia();
+            } else 
+		if (distancia < 300){
+            LedOn(LED_1);
+            LedOn(LED_2);
+            LedOn(LED_3);
+			enviarAdvertencia();
+            }
+        }
 	}
+
+uint8_t tension2AcelerationConversion(){
+	return tension_XYZ/sensibilidad;
 }
 
 static void obtenerAceleracion (void *pvParameter){		// a paritr
     while(1){
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);    /* La tarea espera en este punto hasta recibir una notificación */
+		
+		tension_XYZ = tension_X + tension_Y + tension_Z;
+		if (tension2AcelerationConversion() >= 4){
+			hayCaida = true;
+			enviarAdvertencia();
+		}
 	}
 }
 
@@ -77,6 +123,9 @@ void app_main(void){
     HcSr04Init(GPIO_3, GPIO_2);
     LedsInit();
 	BuzzerInit(GPIO_20);
+	GPIOInit(GPIO_X, GPIO_INPUT);
+	GPIOInit(GPIO_Y, GPIO_INPUT);
+	GPIOInit(GPIO_Z, GPIO_INPUT);
 
 	// Configuracion de ADC
 	analog_input_config_t analogIn = {
@@ -90,7 +139,7 @@ void app_main(void){
     // Inicializacion de UART
     serial_config_t uart = {
         .port = UART_CONNECTOR,
-        .baud_rate = 9600,	// ver el del acelerometro
+        .baud_rate = 9600,	// ver el del modulo BT
         .func_p = NULL,
         .param_p = NULL
     };
